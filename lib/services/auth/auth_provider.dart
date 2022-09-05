@@ -1,7 +1,9 @@
 import 'package:test_app/services/auth/auth_user.dart';
 
 abstract class AuthProvider {
-  AuthUser? currentUser; //auth provideroptionaly return current user
+ Future<void> initialize();
+
+  AuthUser? get currentUser; //auth provideroptionaly return current user
   Future<AuthUser> logIn({
     // login function
     required String email,
