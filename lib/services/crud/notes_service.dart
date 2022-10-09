@@ -1,9 +1,5 @@
 import 'dart:async';
-//import 'dart:html';
-
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' show join;
@@ -15,17 +11,23 @@ class NotesService {
   List<DatabaseNote> _notes = [];
 
   static final NotesService _shared = NotesService._sharedInstance();
-  NotesService._sharedInstance();
+  NotesService._sharedInstance(){
+    _notesStreamController = StreamController<List<DatabaseNote>>.broadcast(
+      onListen: () {
+        _notesStreamController.sink.add(_notes);
+      },
+    );
+
+  }
   factory NotesService() => _shared;
 
-  final _notesStreamController =
-      StreamController<List<DatabaseNote>>.broadcast();
+  late final StreamController<List<DatabaseNote>> _notesStreamController;
 
   Stream<List<DatabaseNote>> get allNotes => _notesStreamController.stream;
 
   Future<DatabaseUser> getOrCreateUser({required String email}) async {
     try {
-      final user = getUser(email: email);
+      final user = await getUser(email: email);
       return user;
     } on CouldNotFindUser {
       final createdUser = await createUser(email: email);
@@ -103,22 +105,22 @@ class NotesService {
   Future<int> deleteAllNotes() async {
     await _ensureDbIsOpen();
     final db = _getDatabaseOrThrow();
-    db.delete(noteTable);
-    final numberOfDeletion = await db.delete(noteTable);
+    //db.delete(noteTable);
+    final numberOfDeletions = await db.delete(noteTable);
     _notes = []; // resetting the notes
     _notesStreamController.add(_notes); //updating th stream controller
-    return numberOfDeletion;
+    return numberOfDeletions;
   }
 
   Future<void> deleteNote({required int id}) async {
     await _ensureDbIsOpen();
     final db = _getDatabaseOrThrow();
-    final deleteCount = await db.delete(
+    final deletedCount = await db.delete(
       noteTable,
       where: 'id=?',
       whereArgs: [id],
     );
-    if (deleteCount == 0) {
+    if (deletedCount == 0) {
       throw CouldNotDeleteNote();
     } else {
       _notes.removeWhere((note) => note.id == id);
@@ -230,12 +232,14 @@ class NotesService {
   Future<void> _ensureDbIsOpen() async {
     try {
       await open();
-    } on DatabaseAlreadyOpeneException {}
+    } on DatabaseAlreadyOpenException {
+      //empty
+    }
   }
 
   Future<void> open() async {
     if (_db != null) {
-      throw DatabaseAlreadyOpeneException();
+      throw DatabaseAlreadyOpenException();
     }
     try {
       final docsPath = await getApplicationDocumentsDirectory();
@@ -297,7 +301,7 @@ class DatabaseNote {
 
   @override
   String toString() =>
-      'Note, ID=$id, userId=$userId, isSyncedWithCloud=$isSyncedWithCloud';
+      'Note, ID=$id, userId=$userId, isSyncedWithCloud=$isSyncedWithCloud,text= $text';
 
   @override
   bool operator ==(covariant DatabaseNote other) => id == other.id;
@@ -306,18 +310,18 @@ class DatabaseNote {
   int get hashCode => id.hashCode;
 }
 
-const dbName = 'Notes.db';
+const dbName = 'notes.db';
 const noteTable = 'note';
 const userTable = 'user';
 const idColumn = 'id';
 const emailColumn = 'email';
 const userIdColumn = 'user_id';
 const textColumn = 'text';
-const isSyncedWithCloudColumn = 'isSyncedWithCloud';
+const isSyncedWithCloudColumn = 'is_synced_with_cloud';
 const createUserTable = '''
       CREATE TABLE IF NOT EXISTS "user" (
         "id"	INTEGER NOT NULL,
-        "email"	INTEGER NOT NULL UNIQUE,
+        "email"	TEXT NOT NULL UNIQUE,
         PRIMARY KEY("id" AUTOINCREMENT)
       );
       ''';
